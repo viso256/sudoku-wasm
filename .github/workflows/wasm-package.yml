@@ -1,0 +1,65 @@
+name: Build WASM package
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+
+      - name: Build package
+        run: |
+          wasm-pack build \
+            --release \
+            --target web \
+            --out-dir pkg
+
+      - name: Update dist branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Preserve the generated package before switching branches
+          cp -r pkg /tmp/wasm-package
+
+          # Switch to the existing dist branch
+          git fetch origin dist:dist
+          git switch dist
+
+          # Remove the previous contents of the dist branch
+          find . -mindepth 1 -maxdepth 1 \
+            ! -name ".git" \
+            -exec rm -rf {} +
+
+          # Copy package contents to the root of the dist branch
+          cp -r /tmp/wasm-package/. .
+
+          git add --all
+          git commit -m "Build WASM package from ${GITHUB_SHA}" || {
+            echo "No changes to commit"
+            exit 0
+          }
+
+          git push origin dist
