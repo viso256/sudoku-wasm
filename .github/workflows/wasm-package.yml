@@ -38,28 +38,44 @@ jobs:
 
       - name: Update dist branch
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Preserve the generated package before switching branches
-          cp -r pkg /tmp/wasm-package
+          echo "Generated package:"
+          find pkg -type f -print
+
+          # Save the generated package outside the repository
+          rm -rf /tmp/wasm-package
+          mkdir -p /tmp/wasm-package
+          cp -r pkg/. /tmp/wasm-package/
 
           # Switch to the existing dist branch
           git fetch origin dist:dist
           git switch dist
 
-          # Remove the previous contents of the dist branch
+          # Remove everything except the .git directory
           find . -mindepth 1 -maxdepth 1 \
             ! -name ".git" \
             -exec rm -rf {} +
 
-          # Copy package contents to the root of the dist branch
+          # Copy generated files to the root of the dist branch
           cp -r /tmp/wasm-package/. .
 
-          git add --all
+          echo "Files copied to dist branch:"
+          find . -maxdepth 2 -type f -print
+
+          # Force-add files in case the main branch's .gitignore ignores them
+          git add --force --all
+
+          echo "Git status:"
+          git status --short
+
           git commit -m "Build WASM package from ${GITHUB_SHA}" || {
             echo "No changes to commit"
             exit 0
           }
 
           git push origin dist
+          
